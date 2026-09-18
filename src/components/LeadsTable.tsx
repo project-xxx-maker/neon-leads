@@ -291,10 +291,19 @@ export function LeadsTable({
                     />
                   </td>
 
-                  {/* Nome da Empresa / Instagram Handle */}
-                  <td className="px-4 py-3.5 max-w-[230px]">
-                    <div className="font-bold text-white flex items-center gap-1.5">
-                      <span className="truncate">{lead.name}</span>
+                  {/* Nome da Empresa / Link Direto de Onde Foi Retirado */}
+                  <td className="px-4 py-3.5 max-w-[240px]">
+                    <div className="font-bold text-white flex items-center gap-1.5 group">
+                      <a
+                        href={lead.sourceUrl || lead.googleMapsUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${lead.name} ${lead.city}`)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="truncate hover:text-cyan-300 hover:underline flex items-center gap-1 transition-colors"
+                        title="Clique para abrir a ficha oficial no Google Maps / Instagram em nova aba"
+                      >
+                        <span className="truncate">{lead.name}</span>
+                        <ExternalLink className="h-3 w-3 shrink-0 text-slate-400 group-hover:text-cyan-400" />
+                      </a>
                       {isSaved && (
                         <span className="shrink-0 rounded bg-cyan-500/20 px-1.5 py-0.2 text-[9px] font-bold text-cyan-300 border border-cyan-500/30">
                           Salvo
@@ -302,19 +311,28 @@ export function LeadsTable({
                       )}
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-slate-400 mt-0.5">
+                    <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-slate-400 mt-1">
                       {isInstagram ? (
                         <a
-                          href={lead.socials?.instagram || `https://instagram.com/${(lead.instagramHandle || "").replace("@", "")}`}
+                          href={lead.sourceUrl || lead.socials?.instagram || `https://instagram.com/${(lead.instagramHandle || "").replace("@", "")}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 rounded bg-pink-500/20 border border-pink-500/30 px-1.5 py-0.2 text-[10px] font-bold text-pink-300 hover:bg-pink-500/30"
+                          className="inline-flex items-center gap-1 rounded-lg bg-pink-500/20 border border-pink-500/30 px-2 py-0.5 text-[10px] font-bold text-pink-300 hover:bg-pink-500/30 transition-all"
                         >
                           <Instagram className="h-2.5 w-2.5" />
-                          <span>{lead.instagramHandle || "@perfil"}</span>
+                          <span>Ver Perfil: {lead.instagramHandle || "@perfil"} ↗</span>
                         </a>
                       ) : (
-                        <span className="text-[11px] text-slate-400">★ {lead.rating?.toFixed(1) || "4.8"} ({lead.reviewsCount} avaliações)</span>
+                        <a
+                          href={lead.sourceUrl || lead.googleMapsUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${lead.name} ${lead.city}`)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 rounded-lg bg-blue-500/20 border border-blue-500/30 px-2 py-0.5 text-[10px] font-bold text-blue-300 hover:bg-blue-500/30 transition-all"
+                        >
+                          <MapPin className="h-2.5 w-2.5 text-blue-400" />
+                          <span>Ver no Maps ↗</span>
+                          <span className="text-slate-400 font-normal">({lead.reviewsCount} avaliações)</span>
+                        </a>
                       )}
                     </div>
                   </td>
@@ -337,24 +355,24 @@ export function LeadsTable({
                         href={lead.sourceUrl || lead.socials?.instagram || `https://instagram.com/${(lead.instagramHandle || "").replace("@", "")}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-pink-500/20 via-rose-500/20 to-amber-500/20 px-2.5 py-1.5 text-[11px] font-bold text-pink-300 border border-pink-500/30 transition-all hover:bg-pink-500/30 hover:scale-105 shadow-sm"
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-pink-500/20 via-rose-500/20 to-amber-500/20 px-3 py-1.5 text-xs font-bold text-pink-300 border border-pink-500/40 transition-all hover:bg-pink-500/30 hover:scale-105 shadow-md"
                         title="Abrir perfil original no Instagram"
                       >
-                        <Instagram className="h-3.5 w-3.5 text-pink-400" />
-                        <span>Instagram</span>
-                        <ExternalLink className="h-2.5 w-2.5 text-pink-400/80" />
+                        <Instagram className="h-4 w-4 text-pink-400" />
+                        <span>Ver no Instagram</span>
+                        <ExternalLink className="h-3 w-3 text-pink-400/80" />
                       </a>
                     ) : (
                       <a
                         href={lead.sourceUrl || lead.googleMapsUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${lead.name} ${lead.city}`)}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 rounded-xl bg-blue-500/15 px-2.5 py-1.5 text-[11px] font-bold text-blue-300 border border-blue-500/30 transition-all hover:bg-blue-500/25 hover:scale-105 shadow-sm"
-                        title="Abrir ficha da empresa no Google Maps"
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-blue-500/20 to-cyan-500/20 px-3 py-1.5 text-xs font-bold text-cyan-300 border border-cyan-500/40 transition-all hover:bg-cyan-500/30 hover:scale-105 shadow-md"
+                        title="Abrir ficha oficial no Google Maps"
                       >
-                        <MapPin className="h-3.5 w-3.5 text-blue-400" />
-                        <span>Google Maps</span>
-                        <ExternalLink className="h-2.5 w-2.5 text-blue-400/80" />
+                        <MapPin className="h-4 w-4 text-cyan-400" />
+                        <span>Ver no Google Maps</span>
+                        <ExternalLink className="h-3 w-3 text-cyan-400/80" />
                       </a>
                     )}
                   </td>

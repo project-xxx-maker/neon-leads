@@ -220,7 +220,14 @@ export function LeadDetailModal({ lead, onClose }: LeadDetailModalProps) {
                   </div>
                   <div>
                     <span className="text-xs text-pink-300 font-semibold">Fonte: Instagram Business</span>
-                    <p className="text-xs text-slate-300">{lead.instagramHandle || "Perfil Comercial"}</p>
+                    <a
+                      href={lead.sourceUrl || (lead.source === "instagram" ? lead.socials?.instagram : lead.googleMapsUrl) || "#"}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[11px] text-slate-300 truncate max-w-[280px] block hover:underline hover:text-pink-300 font-mono"
+                    >
+                      {lead.sourceUrl || (lead.source === "instagram" ? lead.socials?.instagram : lead.googleMapsUrl)}
+                    </a>
                   </div>
                 </>
               ) : (
@@ -229,8 +236,15 @@ export function LeadDetailModal({ lead, onClose }: LeadDetailModalProps) {
                     <MapPin className="h-5 w-5" />
                   </div>
                   <div>
-                    <span className="text-xs text-blue-300 font-semibold">Fonte: Google Maps</span>
-                    <p className="text-xs text-slate-300">Ficha comercial verificada</p>
+                    <span className="text-xs text-blue-300 font-semibold">Fonte Oficial: Google Maps</span>
+                    <a
+                      href={lead.sourceUrl || lead.googleMapsUrl || "#"}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[11px] text-slate-300 truncate max-w-[280px] block hover:underline hover:text-cyan-300 font-mono"
+                    >
+                      {lead.sourceUrl || lead.googleMapsUrl}
+                    </a>
                   </div>
                 </>
               )}
