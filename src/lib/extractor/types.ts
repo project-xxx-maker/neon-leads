@@ -57,8 +57,9 @@ export interface Lead {
   dealValue?: number;
   savedAt?: string;
   audit?: LeadAudit;
-  // Campos de Instagram
+  // Campos de Origem e Fonte
   source?: "google_maps" | "instagram";
+  sourceUrl?: string; // Link direto de onde foi encontrado (Google Maps ou Perfil do Instagram)
   instagramHandle?: string; // ex: @dentistascampinas
   followersCount?: number;
   bioText?: string;

@@ -10,6 +10,8 @@ import {
   DollarSign,
   Building2,
   ExternalLink,
+  Instagram,
+  MapPin,
 } from "lucide-react";
 import { Lead, LeadStatus } from "@/lib/extractor/types";
 
@@ -136,6 +138,31 @@ export function PipelineKanban({ leads, onOpenAiAdvisor, onUpdateStatus }: Pipel
                         {/* Ações do Card */}
                         <div className="mt-3 flex items-center justify-between gap-1.5 pt-2 border-t border-white/5">
                           <div className="flex items-center gap-1">
+                            {/* Link de Origem (Maps ou Instagram) */}
+                            {lead.source === "instagram" ? (
+                              <a
+                                href={lead.sourceUrl || lead.socials?.instagram || `https://instagram.com/${(lead.instagramHandle || "").replace("@", "")}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-0.5 rounded-lg bg-pink-500/15 px-1.5 py-1 text-[10px] font-bold text-pink-300 hover:bg-pink-500/25 border border-pink-500/20"
+                                title="Abrir perfil no Instagram"
+                              >
+                                <Instagram className="h-3 w-3 text-pink-400" />
+                                <span>Insta</span>
+                              </a>
+                            ) : (
+                              <a
+                                href={lead.sourceUrl || lead.googleMapsUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${lead.name} ${lead.city}`)}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-0.5 rounded-lg bg-blue-500/15 px-1.5 py-1 text-[10px] font-bold text-blue-300 hover:bg-blue-500/25 border border-blue-500/20"
+                                title="Abrir ficha no Google Maps"
+                              >
+                                <MapPin className="h-3 w-3 text-blue-400" />
+                                <span>Maps</span>
+                              </a>
+                            )}
+
                             {/* Chamar WhatsApp com script IA */}
                             {lead.phone && (
                               <a

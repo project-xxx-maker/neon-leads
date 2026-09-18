@@ -258,6 +258,7 @@ export function LeadsTable({
               </th>
               <th className="px-4 py-3.5 font-semibold text-slate-300">Empresa / Perfil</th>
               <th className="px-4 py-3.5 font-semibold text-slate-300">Nicho & Cidade</th>
+              <th className="px-4 py-3.5 font-semibold text-slate-300">Origem / Link</th>
               <th className="px-4 py-3.5 font-semibold text-slate-300">Oportunidade & Oferta IA 💡</th>
               <th className="px-4 py-3.5 font-semibold text-slate-300">Contato & WhatsApp</th>
               <th className="px-4 py-3.5 font-semibold text-slate-300">Status CRM</th>
@@ -327,6 +328,35 @@ export function LeadsTable({
                       <MapPin className="h-3 w-3 shrink-0" />
                       <span className="truncate">{lead.city}</span>
                     </div>
+                  </td>
+
+                  {/* Origem / Link de Onde Achamos o Lead */}
+                  <td className="px-4 py-3.5 whitespace-nowrap">
+                    {isInstagram ? (
+                      <a
+                        href={lead.sourceUrl || lead.socials?.instagram || `https://instagram.com/${(lead.instagramHandle || "").replace("@", "")}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-pink-500/20 via-rose-500/20 to-amber-500/20 px-2.5 py-1.5 text-[11px] font-bold text-pink-300 border border-pink-500/30 transition-all hover:bg-pink-500/30 hover:scale-105 shadow-sm"
+                        title="Abrir perfil original no Instagram"
+                      >
+                        <Instagram className="h-3.5 w-3.5 text-pink-400" />
+                        <span>Instagram</span>
+                        <ExternalLink className="h-2.5 w-2.5 text-pink-400/80" />
+                      </a>
+                    ) : (
+                      <a
+                        href={lead.sourceUrl || lead.googleMapsUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${lead.name} ${lead.city}`)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-blue-500/15 px-2.5 py-1.5 text-[11px] font-bold text-blue-300 border border-blue-500/30 transition-all hover:bg-blue-500/25 hover:scale-105 shadow-sm"
+                        title="Abrir ficha da empresa no Google Maps"
+                      >
+                        <MapPin className="h-3.5 w-3.5 text-blue-400" />
+                        <span>Google Maps</span>
+                        <ExternalLink className="h-2.5 w-2.5 text-blue-400/80" />
+                      </a>
+                    )}
                   </td>
 
                   {/* Oportunidade IA */}

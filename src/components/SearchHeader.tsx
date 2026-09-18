@@ -45,7 +45,7 @@ export function SearchHeader({ onSearch, isLoading }: SearchHeaderProps) {
   const [location, setLocation] = useState("Campinas, SP");
   const [limit, setLimit] = useState<number>(0); // 0 = Sem limite
   const [source, setSource] = useState<"maps" | "instagram" | "all">("maps");
-  const [deepScan, setDeepScan] = useState(false);
+  const [deepScan, setDeepScan] = useState(true); // Ativado por padrão para achar o MÁXIMO de leads
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   // Filtros
@@ -187,17 +187,17 @@ export function SearchHeader({ onSearch, isLoading }: SearchHeaderProps) {
             {isLoading ? (
               <>
                 <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-950 border-t-transparent" />
-                <span>Minando Leads...</span>
+                <span>Minerando Máximo de Leads...</span>
               </>
             ) : (
               <>
                 <Sparkles className="h-4 w-4" />
                 <span>
                   {source === "instagram"
-                    ? "Minar no Instagram"
+                    ? "Minerar no Instagram"
                     : limit === 0
-                    ? "Extrair Tudo (Sem Limite)"
-                    : "Buscar & Extrair"}
+                    ? "Extrair Máximo de Leads (Alta Intenção)"
+                    : `Buscar & Extrair (${limit} Leads)`}
                 </span>
               </>
             )}
@@ -239,7 +239,7 @@ export function SearchHeader({ onSearch, isLoading }: SearchHeaderProps) {
             ))}
           </div>
 
-          {source === "maps" && (
+          {source !== "instagram" && (
             <button
               type="button"
               onClick={() => setDeepScan(!deepScan)}
@@ -250,7 +250,7 @@ export function SearchHeader({ onSearch, isLoading }: SearchHeaderProps) {
               }`}
             >
               <Flame className={`h-3.5 w-3.5 ${deepScan ? "text-emerald-400 animate-pulse" : "text-slate-500"}`} />
-              <span>Varredura Profunda (Multi-Regiões)</span>
+              <span>Varredura Máxima (Intenção + Bairros)</span>
               <span className={`rounded-full px-1.5 py-0.2 text-[9px] ${deepScan ? "bg-emerald-400 text-slate-950 font-black" : "bg-slate-800 text-slate-400"}`}>
                 {deepScan ? "ATIVO" : "DESATIVADO"}
               </span>

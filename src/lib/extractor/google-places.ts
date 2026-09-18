@@ -65,6 +65,8 @@ export async function searchGooglePlacesAPI(
       rating: place.rating || 0,
       reviewsCount: place.user_ratings_total || 0,
       googleMapsUrl: place.url || `https://www.google.com/maps/place/?q=place_id:${place.place_id}`,
+      sourceUrl: place.url || `https://www.google.com/maps/place/?q=place_id:${place.place_id}`,
+      source: "google_maps",
       placeId: place.place_id,
       latitude: place.geometry?.location?.lat,
       longitude: place.geometry?.location?.lng,

@@ -1,6 +1,7 @@
 import { chromium, Browser, Page } from "playwright";
 import { Lead } from "./types";
 import { formatPhoneNumber, getWhatsAppLink } from "../utils";
+import { buildAggressiveSweepPlan } from "./intent-engine";
 
 interface PlaywrightScrapeParams {
   query: string;
@@ -9,22 +10,9 @@ interface PlaywrightScrapeParams {
   deepScan?: boolean;
 }
 
-// Subdivisões das principais cidades brasileiras para Deep Scan
-const CITY_ZONES: Record<string, string[]> = {
-  campinas: ["Centro", "Cambuí", "Taquaral", "Barão Geraldo", "Guanabara", "Nova Campinas", "Castelo"],
-  "são paulo": ["Centro", "Pinheiros", "Moema", "Tatuapé", "Santana", "Vila Mariana", "Itaim Bibi", "Morumbi", "Perdizes", "Bela Vista"],
-  "rio de janeiro": ["Centro", "Copacabana", "Barra da Tijuca", "Tijuca", "Botafogo", "Ipanema", "Campo Grande", "Recreio"],
-  "belo horizonte": ["Centro", "Savassi", "Lourdes", "Pampulha", "Buritis", "Funcionários", "Gutierrez"],
-  curitiba: ["Centro", "Batel", "Água Verde", "Cabral", "Bigorrilho", "Portão", "Juvevê"],
-  "porto alegre": ["Centro Histórico", "Moinhos de Vento", "Menino Deus", "Petrópolis", "Bela Vista"],
-  brasília: ["Asa Sul", "Asa Norte", "Sudoeste", "Águas Claras", "Taguatinga"],
-  salvador: ["Pituba", "Barra", "Caminho das Árvores", "Rio Vermelho", "Graça", "Imbuí"],
-  fortaleza: ["Aldeota", "Meireles", "Centro", "Cocó", "Dionísio Torres"],
-  goiânia: ["Setor Bueno", "Setor Marista", "Setor Oeste", "Centro", "Jardim Goiás"],
-};
-
 /**
  * Motor oficial de extração real do Google Maps via Playwright sem limites
+ * Executa varreduras de alta intenção comercial e por bairros/zonas geográficas.
  */
 export async function scrapeRealGoogleMaps(
   params: PlaywrightScrapeParams
@@ -68,32 +56,9 @@ export async function scrapeRealGoogleMaps(
 
     const page = await context.newPage();
 
-    // 2. Determinar as consultas (Busca Direta vs. Deep Scan Multi-Regiões)
-    let searchQueries: string[] = [];
-
-    if (deepScan) {
-      const normalizedLoc = location.toLowerCase();
-      let matchedZones: string[] | null = null;
-
-      for (const [cityName, zones] of Object.entries(CITY_ZONES)) {
-        if (normalizedLoc.includes(cityName)) {
-          matchedZones = zones;
-          break;
-        }
-      }
-
-      if (!matchedZones) {
-        matchedZones = ["Centro", "Zona Sul", "Zona Norte", "Zona Leste", "Zona Oeste"];
-      }
-
-      // Adiciona a busca geral + cada sub-região
-      searchQueries.push(`${query} em ${location}`);
-      matchedZones.forEach((zone) => {
-        searchQueries.push(`${query} em ${zone}, ${location}`);
-      });
-    } else {
-      searchQueries.push(`${query} em ${location}`);
-    }
+    // 2. Determinar as consultas usando o Motor de Intenção e Varredura
+    const searchQueries = buildAggressiveSweepPlan(query, location, deepScan);
+    console.log(`[Neon Leads] Plano de Varredura montado com ${searchQueries.length} consultas estratégicas:`, searchQueries);
 
     // 3. Executar extração em cada consulta acumulando e removendo duplicatas
     for (let i = 0; i < searchQueries.length; i++) {
@@ -260,9 +225,13 @@ async function scrapeSingleQuery(
         }
       }
 
-      // Maps URL
-      const mapsLink = item.querySelector('a[href*="/maps/place/"]');
-      const googleMapsUrl = mapsLink ? mapsLink.getAttribute("href") : "";
+      // Maps URL - Captura o link oficial do card no Google Maps (a.hfpxzc ou a[href*="/maps/place/"])
+      const hfpxzc = item.querySelector('a.hfpxzc');
+      const mapsLink = hfpxzc || item.querySelector('a[href*="/maps/place/"]') || item.querySelector('a[href*="maps"]');
+      let googleMapsUrl = mapsLink ? mapsLink.getAttribute("href") || "" : "";
+      if (googleMapsUrl && googleMapsUrl.startsWith("/")) {
+        googleMapsUrl = `https://www.google.com${googleMapsUrl}`;
+      }
 
       // Categoria e Endereço aproximado
       let category = "";
@@ -300,6 +269,11 @@ async function scrapeSingleQuery(
     const uniqueKey = `${p.name.toLowerCase().trim()}_${p.phone.replace(/\D/g, "") || p.address.toLowerCase().slice(0, 20)}`;
 
     if (!leadMap.has(uniqueKey)) {
+      // Link direto e oficial de onde foi encontrado no Google Maps
+      const directMapsUrl = p.googleMapsUrl && p.googleMapsUrl.includes("http")
+        ? p.googleMapsUrl
+        : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${p.name} ${p.address || baseLocation}`)}`;
+
       leadMap.set(uniqueKey, {
         id: `gm_real_${Date.now()}_${leadMap.size}`,
         name: p.name,
@@ -315,7 +289,9 @@ async function scrapeSingleQuery(
         city: baseLocation,
         rating: p.rating,
         reviewsCount: p.reviewsCount,
-        googleMapsUrl: p.googleMapsUrl || searchUrl,
+        googleMapsUrl: directMapsUrl,
+        sourceUrl: directMapsUrl,
+        source: "google_maps",
         enriched: false,
       });
     }

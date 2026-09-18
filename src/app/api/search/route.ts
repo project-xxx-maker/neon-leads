@@ -71,10 +71,17 @@ export async function POST(req: NextRequest) {
         finalCategory = cleanCategory;
       }
 
+      const isInstagram = lead.source === "instagram";
+      const sourceUrl = isInstagram
+        ? (lead.sourceUrl || lead.socials?.instagram || (lead.instagramHandle ? `https://instagram.com/${lead.instagramHandle.replace("@", "")}` : ""))
+        : (lead.sourceUrl || lead.googleMapsUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${lead.name} ${cleanCity}`)}`);
+
       return {
         ...lead,
         category: finalCategory,
         city: cleanCity, // Cidade exatamente como configurada no painel de busca
+        sourceUrl,
+        googleMapsUrl: lead.googleMapsUrl || sourceUrl,
       };
     });
 

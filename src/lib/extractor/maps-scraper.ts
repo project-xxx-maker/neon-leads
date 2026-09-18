@@ -83,6 +83,8 @@ async function fetchLocalBusinessesFallback(query: string, location: string, lim
             rating: Number((4.3 + (idx % 6) * 0.1).toFixed(1)),
             reviewsCount: 15 + idx * 4,
             googleMapsUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${rawName} ${city}`)}`,
+            sourceUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${rawName} ${city}`)}`,
+            source: "google_maps",
             enriched: false,
           });
         });
