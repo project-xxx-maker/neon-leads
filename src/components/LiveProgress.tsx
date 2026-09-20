@@ -7,9 +7,11 @@ interface LiveProgressProps {
   isLoading: boolean;
   query: string;
   location: string;
+  liveMessage?: string;
+  leadsCount?: number;
 }
 
-export function LiveProgress({ isLoading, query, location }: LiveProgressProps) {
+export function LiveProgress({ isLoading, query, location, liveMessage, leadsCount = 0 }: LiveProgressProps) {
   const [stepIndex, setStepIndex] = useState(0);
   const [progress, setProgress] = useState(15);
 
@@ -28,20 +30,20 @@ export function LiveProgress({ isLoading, query, location }: LiveProgressProps) 
       return;
     }
 
-    setProgress(15);
-    setStepIndex(0);
+    setProgress(20);
+    setStepIndex(1);
 
     const interval = setInterval(() => {
       setProgress((prev) => {
-        if (prev < 90) return prev + Math.floor(Math.random() * 15) + 5;
-        return 92;
+        if (prev < 90) return prev + Math.floor(Math.random() * 8) + 2;
+        return 94;
       });
 
       setStepIndex((prev) => {
         if (prev < steps.length - 2) return prev + 1;
         return prev;
       });
-    }, 1200);
+    }, 1500);
 
     return () => clearInterval(interval);
   }, [isLoading]);
@@ -59,11 +61,18 @@ export function LiveProgress({ isLoading, query, location }: LiveProgressProps) 
               <CurrentIcon className="h-5 w-5 animate-spin" />
             </div>
             <div>
-              <h4 className="text-sm font-bold text-white">
-                Extração em Andamento
-              </h4>
-              <p className="text-xs text-cyan-400">
-                {steps[stepIndex]?.label}
+              <div className="flex items-center gap-2">
+                <h4 className="text-sm font-bold text-white">
+                  Extração em Tempo Real
+                </h4>
+                {leadsCount > 0 && (
+                  <span className="rounded-full bg-cyan-500/20 px-2 py-0.5 text-[11px] font-extrabold text-cyan-300 border border-cyan-500/30 animate-pulse">
+                    {leadsCount} minerados ao vivo
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-cyan-400 font-medium">
+                {liveMessage || steps[stepIndex]?.label}
               </p>
             </div>
           </div>

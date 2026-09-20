@@ -29,6 +29,7 @@ export default function Home() {
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [selectedAiLead, setSelectedAiLead] = useState<Lead | null>(null);
   const [onlyNoWebsiteFilter, setOnlyNoWebsiteFilter] = useState(false);
+  const [liveMessage, setLiveMessage] = useState("");
 
   // CRM & Carteira Permanente
   const [savedLeads, setSavedLeads] = useState<Lead[]>([]);
@@ -198,11 +199,13 @@ export default function Home() {
     }
   };
 
-  // Disparo da Busca
+  // Disparo da Busca com Streaming em Tempo Real
   const handleSearch = async (params: SearchFilterParams) => {
     setIsLoading(true);
     setCurrentQuery(params.query);
     setCurrentLocation(params.location);
+    setLiveMessage(`Iniciando radar para "${params.query}" em "${params.location}"...`);
+    setLeads([]);
 
     try {
       const payload = {
@@ -210,32 +213,110 @@ export default function Home() {
         googleApiKey: apiKey || undefined,
       };
 
-      const res = await fetch("/api/search", {
+      const res = await fetch("/api/search/stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
-      const data = await res.json();
-
-      if (!res.ok) {
-        alert(data.error || "Ocorreu um erro ao extrair leads.");
+      if (!res.ok || !res.body) {
+        // Fallback para rota síncrona tradicional se streaming não estiver disponível
+        const fallbackRes = await fetch("/api/search", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const data = await fallbackRes.json();
+        if (data.data && Array.isArray(data.data)) {
+          setLeads(data.data);
+          handleSaveHistory(params.query, params.location, data.data);
+        }
         return;
       }
 
-      if (data.data && Array.isArray(data.data)) {
-        setLeads(data.data);
-        handleSaveHistory(params.query, params.location, data.data);
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      const streamLeads: Lead[] = [];
 
-        confetti({
-          particleCount: 80,
-          spread: 70,
-          origin: { y: 0.8 },
-          colors: ["#00f0ff", "#f59e0b", "#10b981"],
-        });
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split("\n\n");
+        buffer = parts.pop() || "";
+
+        for (const part of parts) {
+          if (!part.trim()) continue;
+
+          let eventName = "message";
+          let dataText = "";
+
+          const lines = part.split("\n");
+          for (const line of lines) {
+            if (line.startsWith("event: ")) {
+              eventName = line.slice(7).trim();
+            } else if (line.startsWith("data: ")) {
+              dataText = line.slice(6).trim();
+            }
+          }
+
+          if (!dataText) continue;
+
+          try {
+            const parsed = JSON.parse(dataText);
+
+            if (eventName === "status") {
+              setLiveMessage(parsed.message || "");
+            } else if (eventName === "lead") {
+              const newLead = parsed as Lead;
+              const exists = streamLeads.some(
+                (l) => l.id === newLead.id || (l.name.toLowerCase() === newLead.name.toLowerCase() && l.phone === newLead.phone)
+              );
+
+              if (!exists) {
+                streamLeads.push(newLead);
+                // REGRA OBRIGATÓRIA: Sem site sempre no topo!
+                const sorted = [...streamLeads].sort((a, b) => {
+                  const aNo = !a.website ? 1 : 0;
+                  const bNo = !b.website ? 1 : 0;
+                  return bNo - aNo;
+                });
+                setLeads(sorted);
+              }
+            } else if (eventName === "lead_update") {
+              const updated = parsed as Lead;
+              const idx = streamLeads.findIndex((l) => l.id === updated.id);
+              if (idx !== -1) {
+                streamLeads[idx] = updated;
+                const sorted = [...streamLeads].sort((a, b) => {
+                  const aNo = !a.website ? 1 : 0;
+                  const bNo = !b.website ? 1 : 0;
+                  return bNo - aNo;
+                });
+                setLeads(sorted);
+              }
+            } else if (eventName === "done") {
+              if (streamLeads.length > 0) {
+                handleSaveHistory(params.query, params.location, streamLeads);
+                confetti({
+                  particleCount: 80,
+                  spread: 70,
+                  origin: { y: 0.8 },
+                  colors: ["#00f0ff", "#f59e0b", "#10b981"],
+                });
+              }
+            }
+          } catch (jsonErr) {}
+        }
+      }
+
+      if (streamLeads.length > 0) {
+        handleSaveHistory(params.query, params.location, streamLeads);
       }
     } catch (err: any) {
-      console.error(err);
+      console.error("[Neon Leads] Erro no stream:", err);
       alert("Falha de conexão com a API de extração.");
     } finally {
       setIsLoading(false);
@@ -362,6 +443,8 @@ export default function Home() {
               isLoading={isLoading}
               query={currentQuery}
               location={currentLocation}
+              liveMessage={liveMessage}
+              leadsCount={leads.length}
             />
 
             <StatsCards

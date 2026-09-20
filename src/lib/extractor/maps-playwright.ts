@@ -2,12 +2,14 @@ import { chromium, Browser, Page } from "playwright";
 import { Lead } from "./types";
 import { formatPhoneNumber, getWhatsAppLink } from "../utils";
 import { buildAggressiveSweepPlan } from "./intent-engine";
+import { isValidBusinessEntity, cleanBusinessName } from "./street-filter";
 
 interface PlaywrightScrapeParams {
   query: string;
   location: string;
   limit?: number; // 0 = Sem limite
   deepScan?: boolean;
+  onLead?: (lead: Lead) => void; // Callback para streaming em tempo real
 }
 
 /**
@@ -72,7 +74,7 @@ export async function scrapeRealGoogleMaps(
 
       try {
         const remainingLimit = limit > 0 ? limit - leadMap.size : 0;
-        await scrapeSingleQuery(page, currentQueryText, remainingLimit, leadMap, location, query);
+        await scrapeSingleQuery(page, currentQueryText, remainingLimit, leadMap, location, query, params.onLead);
       } catch (subErr: any) {
         console.warn(`[Neon Leads] Erro parcial na consulta "${currentQueryText}":`, subErr.message);
       }
@@ -100,7 +102,8 @@ async function scrapeSingleQuery(
   targetLimit: number, // 0 = Sem limite
   leadMap: Map<string, Lead>,
   baseLocation: string,
-  categoryKeyword: string
+  categoryKeyword: string,
+  onLead?: (lead: Lead) => void
 ) {
   const searchUrl = `https://www.google.com/maps/search/${encodeURIComponent(searchQuery)}?hl=pt-BR`;
 
@@ -128,19 +131,19 @@ async function scrapeSingleQuery(
     return;
   }
 
-  await page.waitForTimeout(1200);
+  await page.waitForTimeout(1000);
 
-  // Rolagem Inteligente do Feed
+  // Extrair primeiros cards visíveis imediatamente
+  await extractAndStreamCards(page, leadMap, baseLocation, categoryKeyword, onLead, targetLimit);
+
+  // Rolagem Inteligente do Feed com extração contínua em tempo real
   let previousCount = 0;
   let consecutiveNoChange = 0;
   const maxConsecutiveNoChange = 4;
   const maxTotalScrolls = targetLimit === 0 ? 80 : Math.ceil(targetLimit / 5) + 10;
 
   for (let s = 0; s < maxTotalScrolls; s++) {
-    const currentCardsCount = await page.locator('div[role="feed"] .fontHeadlineSmall').count();
-
-    // Se já atingiu o limite solicitado (e limit > 0)
-    if (targetLimit > 0 && currentCardsCount >= targetLimit) {
+    if (targetLimit > 0 && leadMap.size >= targetLimit) {
       break;
     }
 
@@ -152,13 +155,15 @@ async function scrapeSingleQuery(
       }
     });
 
-    await page.waitForTimeout(1200);
+    await page.waitForTimeout(1000);
+
+    // Extrair novos estabelecimentos carregados nesta rolagem e transmitir ao vivo
+    await extractAndStreamCards(page, leadMap, baseLocation, categoryKeyword, onLead, targetLimit);
 
     const newCount = await page.locator('div[role="feed"] .fontHeadlineSmall').count();
 
     if (newCount === previousCount) {
       consecutiveNoChange++;
-      // Verificar se chegou explicitamente ao final da lista
       const reachedEnd = await page
         .locator('text="Você chegou ao final da lista"')
         .isVisible({ timeout: 400 })
@@ -174,131 +179,161 @@ async function scrapeSingleQuery(
 
     previousCount = newCount;
   }
+}
 
-  // Extrair os dados dos cards
-  const places = await page.evaluate(() => {
-    const feed = document.querySelector('div[role="feed"]');
-    if (!feed) return [];
+/**
+ * Extrai dados dos cards renderizados no feed do Google Maps, filtra ruas/logradouros e emite em tempo real
+ */
+async function extractAndStreamCards(
+  page: Page,
+  leadMap: Map<string, Lead>,
+  baseLocation: string,
+  categoryKeyword: string,
+  onLead?: (lead: Lead) => void,
+  targetLimit: number = 0
+) {
+  try {
+    const places = await page.evaluate(() => {
+      const feed = document.querySelector('div[role="feed"]');
+      if (!feed) return [];
 
-    const items = Array.from(feed.querySelectorAll('div > div[jsaction]'));
-    const list = [];
-    const localSeen = new Set();
+      const items = Array.from(feed.querySelectorAll('div > div[jsaction]'));
+      const list = [];
+      const localSeen = new Set();
 
-    for (const item of items) {
-      const nameEl = item.querySelector('.fontHeadlineSmall');
-      if (!nameEl) continue;
+      for (const item of items) {
+        const nameEl = item.querySelector('.fontHeadlineSmall');
+        if (!nameEl) continue;
 
-      const name = nameEl.textContent?.trim() || "";
-      if (!name || localSeen.has(name)) continue;
-      localSeen.add(name);
+        const rawName = nameEl.textContent?.trim() || "";
+        if (!rawName || localSeen.has(rawName)) continue;
+        localSeen.add(rawName);
 
-      const fullText = item.textContent || "";
+        const fullText = item.textContent || "";
 
-      // Nota
-      const ratingMatch = fullText.match(/(\d[.,]\d)(?:\s*estrelas|\s*\(|\s*[A-ZÀ-Ú])/i);
-      let rating = 4.5;
-      if (ratingMatch) {
-        rating = parseFloat(ratingMatch[1].replace(",", "."));
+        // Nota
+        const ratingMatch = fullText.match(/(\d[.,]\d)(?:\s*estrelas|\s*\(|\s*[A-ZÀ-Ú])/i);
+        let rating = 4.5;
+        if (ratingMatch) {
+          rating = parseFloat(ratingMatch[1].replace(",", "."));
+        }
+
+        // Avaliações
+        const revMatch = fullText.match(/\((\d[\d.,]*)\)/);
+        const reviewsCount = revMatch ? parseInt(revMatch[1].replace(/\D/g, ""), 10) : 0;
+
+        // Telefone
+        const phoneMatch = fullText.match(/(?:\(?\d{2}\)?\s*)?(?:9\d{4}|\d{4})[-.\s]?\d{4}/);
+        const phone = phoneMatch ? phoneMatch[0].trim() : "";
+
+        // Website
+        let website = "";
+        const links = Array.from(item.querySelectorAll('a[href]'));
+        for (const a of links) {
+          const href = a.getAttribute("href") || "";
+          if (
+            href.startsWith("http") &&
+            !href.includes("google.com") &&
+            !href.includes("gstatic.com") &&
+            !href.includes("goo.gl")
+          ) {
+            website = href;
+            break;
+          }
+        }
+
+        // Maps URL
+        const hfpxzc = item.querySelector('a.hfpxzc');
+        const mapsLink = hfpxzc || item.querySelector('a[href*="/maps/place/"]') || item.querySelector('a[href*="maps"]');
+        let googleMapsUrl = mapsLink ? mapsLink.getAttribute("href") || "" : "";
+        if (googleMapsUrl && googleMapsUrl.startsWith("/")) {
+          googleMapsUrl = `https://www.google.com${googleMapsUrl}`;
+        }
+
+        // Categoria e Endereço aproximado
+        let category = "";
+        let address = "";
+        const textParts = fullText.split("·").map((p) => p.trim());
+        if (textParts.length >= 2) {
+          const catCandidate = textParts[0].split(/\d[.,]\d/).pop()?.trim();
+          if (catCandidate && catCandidate.length < 35) {
+            category = catCandidate.replace(/^[\d().,\s]+/, "").trim();
+          }
+          address = textParts[1].replace(/Aberto.*|Fechado.*/, "").trim();
+        }
+
+        list.push({
+          name: rawName,
+          category,
+          phone,
+          website,
+          rating,
+          reviewsCount,
+          address,
+          googleMapsUrl,
+        });
       }
 
-      // Avaliações
-      const revMatch = fullText.match(/\((\d[\d.,]*)\)/);
-      const reviewsCount = revMatch ? parseInt(revMatch[1].replace(/\D/g, ""), 10) : 0;
+      return list;
+    });
 
-      // Telefone
-      const phoneMatch = fullText.match(/(?:\(?\d{2}\)?\s*)?(?:9\d{4}|\d{4})[-.\s]?\d{4}/);
-      const phone = phoneMatch ? phoneMatch[0].trim() : "";
+    for (const p of places) {
+      // 1. FILTRO ANTI-RUAS E ANTI-LOGRADOUROS
+      if (!isValidBusinessEntity(p.name, categoryKeyword)) {
+        continue;
+      }
 
-      // Website
-      let website = "";
-      const links = Array.from(item.querySelectorAll('a[href]'));
-      for (const a of links) {
-        const href = a.getAttribute("href") || "";
-        if (
-          href.startsWith("http") &&
-          !href.includes("google.com") &&
-          !href.includes("gstatic.com") &&
-          !href.includes("goo.gl")
-        ) {
-          website = href;
-          break;
+      const cleanName = cleanBusinessName(p.name);
+      if (!cleanName || !isValidBusinessEntity(cleanName, categoryKeyword)) {
+        continue;
+      }
+
+      const isWhats = isMobilePhone(p.phone);
+      const formatted = formatPhoneNumber(p.phone);
+      const uniqueKey = `${cleanName.toLowerCase()}_${p.phone.replace(/\D/g, "") || p.address.toLowerCase().slice(0, 20)}`;
+
+      if (!leadMap.has(uniqueKey)) {
+        const directMapsUrl = p.googleMapsUrl && p.googleMapsUrl.includes("http")
+          ? p.googleMapsUrl
+          : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${cleanName} ${p.address || baseLocation}`)}`;
+
+        const newLead: Lead = {
+          id: `gm_real_${Date.now()}_${leadMap.size}`,
+          name: cleanName,
+          category: p.category || categoryKeyword,
+          phone: p.phone,
+          formattedPhone: formatted,
+          isWhatsapp: isWhats,
+          whatsappUrl: isWhats ? getWhatsAppLink(p.phone, cleanName) : null,
+          website: p.website || undefined,
+          emails: [],
+          socials: {},
+          address: p.address || baseLocation,
+          city: baseLocation,
+          rating: p.rating,
+          reviewsCount: p.reviewsCount,
+          googleMapsUrl: directMapsUrl,
+          sourceUrl: directMapsUrl,
+          source: "google_maps",
+          enriched: false,
+        };
+
+        leadMap.set(uniqueKey, newLead);
+
+        // Streaming em tempo real do novo lead
+        if (onLead) {
+          try {
+            onLead(newLead);
+          } catch (e) {}
         }
       }
 
-      // Maps URL - Captura o link oficial do card no Google Maps (a.hfpxzc ou a[href*="/maps/place/"])
-      const hfpxzc = item.querySelector('a.hfpxzc');
-      const mapsLink = hfpxzc || item.querySelector('a[href*="/maps/place/"]') || item.querySelector('a[href*="maps"]');
-      let googleMapsUrl = mapsLink ? mapsLink.getAttribute("href") || "" : "";
-      if (googleMapsUrl && googleMapsUrl.startsWith("/")) {
-        googleMapsUrl = `https://www.google.com${googleMapsUrl}`;
+      if (targetLimit > 0 && leadMap.size >= targetLimit) {
+        break;
       }
-
-      // Categoria e Endereço aproximado
-      let category = "";
-      let address = "";
-      const textParts = fullText.split("·").map((p) => p.trim());
-      if (textParts.length >= 2) {
-        const catCandidate = textParts[0].split(/\d[.,]\d/).pop()?.trim();
-        if (catCandidate && catCandidate.length < 35) {
-          category = catCandidate;
-        }
-        address = textParts[1].replace(/Aberto.*|Fechado.*/, "").trim();
-      }
-
-      list.push({
-        name,
-        category,
-        phone,
-        website,
-        rating,
-        reviewsCount,
-        address,
-        googleMapsUrl,
-      });
     }
-
-    return list;
-  });
-
-  // Inserir no Map deduplicando
-  for (const p of places) {
-    const isWhats = isMobilePhone(p.phone);
-    const formatted = formatPhoneNumber(p.phone);
-
-    // Chave única para evitar duplicatas: Nome + Telefone (ou Nome + Endereço)
-    const uniqueKey = `${p.name.toLowerCase().trim()}_${p.phone.replace(/\D/g, "") || p.address.toLowerCase().slice(0, 20)}`;
-
-    if (!leadMap.has(uniqueKey)) {
-      // Link direto e oficial de onde foi encontrado no Google Maps
-      const directMapsUrl = p.googleMapsUrl && p.googleMapsUrl.includes("http")
-        ? p.googleMapsUrl
-        : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${p.name} ${p.address || baseLocation}`)}`;
-
-      leadMap.set(uniqueKey, {
-        id: `gm_real_${Date.now()}_${leadMap.size}`,
-        name: p.name,
-        category: p.category || categoryKeyword,
-        phone: p.phone,
-        formattedPhone: formatted,
-        isWhatsapp: isWhats,
-        whatsappUrl: isWhats ? getWhatsAppLink(p.phone, p.name) : null,
-        website: p.website || undefined,
-        emails: [],
-        socials: {},
-        address: p.address || baseLocation,
-        city: baseLocation,
-        rating: p.rating,
-        reviewsCount: p.reviewsCount,
-        googleMapsUrl: directMapsUrl,
-        sourceUrl: directMapsUrl,
-        source: "google_maps",
-        enriched: false,
-      });
-    }
-
-    if (targetLimit > 0 && leadMap.size >= targetLimit) {
-      break;
-    }
+  } catch (err: any) {
+    console.warn("[Neon Leads] Erro parcial na extração de cards:", err.message);
   }
 }
 
