@@ -77,7 +77,6 @@ export interface SearchFilterParams {
   onlyWithoutWebsite?: boolean;
   minRating?: number;
   enrichSocialsAndEmail?: boolean;
-  googleApiKey?: string;
 }
 
 export interface SearchProgressStep {

@@ -210,8 +210,9 @@ async function searchDirectInstagramProfiles(
           instagramHandle: `@${handle}`,
           address: `${cleanCity}, Brasil`,
           city: location,
-          rating: 4.8,
-          reviewsCount: 30 + (leadMap.size % 20) * 5,
+          // Perfil indexado não oferece avaliação do Google verificável.
+          rating: 0,
+          reviewsCount: 0,
           googleMapsUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${businessName} ${cleanCity}`)}`,
           sourceUrl: profileUrl,
           source: "instagram",

@@ -186,8 +186,9 @@ async function fetchTelelistasBusinesses(
       socials: {},
       address,
       city: location,
-      rating: Number((4.5 + (leads.length % 5) * 0.1).toFixed(1)),
-      reviewsCount: 16 + leads.length * 4,
+      // Telelistas não informa nota/avaliações do Google; nunca fabricar esses dados.
+      rating: 0,
+      reviewsCount: 0,
       googleMapsUrl: directMapsUrl,
       sourceUrl: directMapsUrl,
       source: "google_maps",

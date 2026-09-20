@@ -1,7 +1,6 @@
 ﻿import { NextRequest } from "next/server";
 import { scrapeGoogleMaps } from "@/lib/extractor/maps-scraper";
 import { scrapeInstagramBusiness } from "@/lib/extractor/instagram-scraper";
-import { searchGooglePlacesAPI } from "@/lib/extractor/google-places";
 import { enrichWebsite } from "@/lib/extractor/enricher";
 import { Lead, SearchFilterParams } from "@/lib/extractor/types";
 import { generateLeadAudit } from "@/lib/ai/advisor";
@@ -24,7 +23,6 @@ export async function POST(req: NextRequest) {
       onlyWithoutWebsite = false,
       minRating = 0,
       enrichSocialsAndEmail = true,
-      googleApiKey,
     } = body;
 
     if (!query || !location) {
@@ -112,17 +110,13 @@ export async function POST(req: NextRequest) {
             });
           } else if (source === "all") {
             await Promise.all([
-              googleApiKey && googleApiKey.trim().length > 10
-                ? searchGooglePlacesAPI(query, location, googleApiKey, targetLimit).then((places) => {
-                    places.forEach(handleLiveLead);
-                  })
-                : scrapeGoogleMaps({
-                    query,
-                    location,
-                    limit: targetLimit,
-                    deepScan,
-                    onLead: handleLiveLead,
-                  }),
+              scrapeGoogleMaps({
+                query,
+                location,
+                limit: targetLimit,
+                deepScan,
+                onLead: handleLiveLead,
+              }),
               scrapeInstagramBusiness({
                 query,
                 location,
@@ -132,28 +126,13 @@ export async function POST(req: NextRequest) {
             ]);
           } else {
             // Google Maps
-            if (googleApiKey && googleApiKey.trim().length > 10) {
-              try {
-                const apiLeads = await searchGooglePlacesAPI(query, location, googleApiKey, targetLimit);
-                apiLeads.forEach(handleLiveLead);
-              } catch (err: any) {
-                await scrapeGoogleMaps({
-                  query,
-                  location,
-                  limit: targetLimit,
-                  deepScan,
-                  onLead: handleLiveLead,
-                });
-              }
-            } else {
-              await scrapeGoogleMaps({
-                query,
-                location,
-                limit: targetLimit,
-                deepScan,
-                onLead: handleLiveLead,
-              });
-            }
+            await scrapeGoogleMaps({
+              query,
+              location,
+              limit: targetLimit,
+              deepScan,
+              onLead: handleLiveLead,
+            });
           }
 
           // Estatísticas finais

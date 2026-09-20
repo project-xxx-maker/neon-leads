@@ -38,12 +38,20 @@ bun install # ou npm install
 # 2. Iniciar servidor em desenvolvimento
 bun run dev # ou npm run dev
 
+# Na primeira vez, instale o navegador usado pelo coletor
+npx playwright install chromium
+
+# Em outro terminal, inicie o coletor local (necessário para buscar no Maps/Instagram sem API ou VPS)
+npm run collector
+
 # 3. Ou compilar e rodar em produção
 bun run build
 bun run start
 ```
 
-Acesse no navegador: `http://localhost:3000`
+Para fazer buscas, acesse no navegador: `http://localhost:3000`
+
+O modo de coleta deve ser usado com o painel local acima. Ele se comunica com o coletor em `http://localhost:3210` no seu computador, usando apenas páginas públicas e sem chave de API. Para uma busca funcionar, deixe os dois terminais abertos. Uma versão publicada no Vercel precisa de uma extensão do Chrome para conversar com o coletor local — isso pode ser adicionado numa próxima etapa.
 
 ---
 

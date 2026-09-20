@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { scrapeGoogleMaps } from "@/lib/extractor/maps-scraper";
 import { scrapeInstagramBusiness } from "@/lib/extractor/instagram-scraper";
-import { searchGooglePlacesAPI } from "@/lib/extractor/google-places";
 import { enrichWebsite } from "@/lib/extractor/enricher";
 import { Lead, SearchFilterParams } from "@/lib/extractor/types";
 import { generateLeadAudit } from "@/lib/ai/advisor";
@@ -23,7 +22,6 @@ export async function POST(req: NextRequest) {
       onlyWithoutWebsite = false,
       minRating = 0,
       enrichSocialsAndEmail = true,
-      googleApiKey,
     } = body;
 
     if (!query || !location) {
@@ -40,24 +38,13 @@ export async function POST(req: NextRequest) {
       leads = await scrapeInstagramBusiness({ query, location, limit });
     } else if (source === "all") {
       const [mapsLeads, igLeads] = await Promise.all([
-        googleApiKey && googleApiKey.trim().length > 10
-          ? searchGooglePlacesAPI(query, location, googleApiKey, limit || 30)
-          : scrapeGoogleMaps({ query, location, limit, deepScan }),
+        scrapeGoogleMaps({ query, location, limit, deepScan }),
         scrapeInstagramBusiness({ query, location, limit }),
       ]);
       leads = [...mapsLeads, ...igLeads];
     } else {
       // Padrão: Google Maps
-      if (googleApiKey && googleApiKey.trim().length > 10) {
-        try {
-          leads = await searchGooglePlacesAPI(query, location, googleApiKey, limit || 50);
-        } catch (err: any) {
-          console.warn("Google API failed, falling back to scraper:", err.message);
-          leads = await scrapeGoogleMaps({ query, location, limit, deepScan });
-        }
-      } else {
-        leads = await scrapeGoogleMaps({ query, location, limit, deepScan });
-      }
+      leads = await scrapeGoogleMaps({ query, location, limit, deepScan });
     }
 
     // 2. Ajuste Fino: Garantir que a Cidade e a Categoria do painel de busca fiquem perfeitamente alinhadas

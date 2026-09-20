@@ -39,28 +39,20 @@ export default function Home() {
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
   // Armazenamento Local
-  const [apiKey, setApiKey] = useState("");
   const [history, setHistory] = useState<SearchHistoryItem[]>([]);
 
   // Carregar dados na montagem
   useEffect(() => {
     try {
-      const savedKey = localStorage.getItem("neon_leads_api_key") || "";
       const savedHist = localStorage.getItem("neon_leads_history");
       const savedWallet = localStorage.getItem("neon_leads_wallet");
 
-      if (savedKey) setApiKey(savedKey);
       if (savedHist) setHistory(JSON.parse(savedHist));
       if (savedWallet) setSavedLeads(JSON.parse(savedWallet));
     } catch (e) {
       console.warn("Erro ao carregar do localStorage:", e);
     }
   }, []);
-
-  const handleSaveApiKey = (key: string) => {
-    setApiKey(key);
-    localStorage.setItem("neon_leads_api_key", key);
-  };
 
   const handleSaveHistory = (query: string, location: string, newLeads: Lead[]) => {
     if (newLeads.length === 0) return;
@@ -208,31 +200,16 @@ export default function Home() {
     setLeads([]);
 
     try {
-      const payload = {
-        ...params,
-        googleApiKey: apiKey || undefined,
-      };
+      const collectorUrl = process.env.NEXT_PUBLIC_COLLECTOR_URL || "http://localhost:3210";
+      const payload = params;
 
-      const res = await fetch("/api/search/stream", {
+      const res = await fetch(`${collectorUrl}/search`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
-      if (!res.ok || !res.body) {
-        // Fallback para rota síncrona tradicional se streaming não estiver disponível
-        const fallbackRes = await fetch("/api/search", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-        const data = await fallbackRes.json();
-        if (data.data && Array.isArray(data.data)) {
-          setLeads(data.data);
-          handleSaveHistory(params.query, params.location, data.data);
-        }
-        return;
-      }
+      if (!res.ok || !res.body) throw new Error("Coletor local indisponível");
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
@@ -317,7 +294,7 @@ export default function Home() {
       }
     } catch (err: any) {
       console.error("[Neon Leads] Erro no stream:", err);
-      alert("Falha de conexão com a API de extração.");
+      alert("Não foi possível conectar ao Coletor Local. Inicie-o com: npm run collector");
     } finally {
       setIsLoading(false);
     }
@@ -554,8 +531,6 @@ export default function Home() {
       <SettingsModal
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
-        apiKey={apiKey}
-        onSaveApiKey={handleSaveApiKey}
       />
 
       <HistoryDrawer
