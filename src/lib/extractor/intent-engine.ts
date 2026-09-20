@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Motor de Expansão de Intenção e Varredura Territorial
  * Gera variações semânticas de alta conversão e subdivisões por bairros/zonas
  * para minerar o MÁXIMO possível de leads únicos em qualquer nicho ou cidade.
@@ -279,19 +279,21 @@ export function buildAggressiveSweepPlan(
 ): string[] {
   const queries: string[] = [];
 
+  // Consulta principal direta
   queries.push(`${query} em ${location}`);
-
-  const intentVars = generateHighIntentQueries(query, location);
-  intentVars.forEach((q) => {
-    if (!queries.includes(q)) queries.push(q);
-  });
 
   if (!deepScan) {
     return queries;
   }
 
+  // Se o usuário solicitou varredura profunda explicitamente
+  const intentVars = generateHighIntentQueries(query, location);
+  intentVars.slice(0, 2).forEach((q) => {
+    if (!queries.includes(q)) queries.push(q);
+  });
+
   const zones = getCityZones(location);
-  zones.slice(0, 6).forEach((zone) => {
+  zones.slice(0, 3).forEach((zone) => {
     const zoneQuery = `${query} em ${zone}, ${location}`;
     if (!queries.includes(zoneQuery)) {
       queries.push(zoneQuery);

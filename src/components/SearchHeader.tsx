@@ -42,10 +42,10 @@ const POPULAR_LOCATIONS = [
 
 export function SearchHeader({ onSearch, isLoading }: SearchHeaderProps) {
   const [query, setQuery] = useState("Dentistas");
-  const [location, setLocation] = useState("Campinas, SP");
-  const [limit, setLimit] = useState<number>(0); // 0 = Sem limite
+  const [location, setLocation] = useState("São Paulo, SP");
+  const [limit, setLimit] = useState<number>(20); // 20 leads por padrão para resposta instantânea
   const [source, setSource] = useState<"maps" | "instagram" | "all">("maps");
-  const [deepScan, setDeepScan] = useState(true); // Ativado por padrão para achar o MÁXIMO de leads
+  const [deepScan, setDeepScan] = useState(false); // Foco em velocidade; pode ser ativado nas opções avançadas
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   // Filtros

@@ -34,14 +34,14 @@ export async function scrapeInstagramBusiness(
     console.warn("[Neon Leads] Erro na busca direta de Instagram:", err.message);
   }
 
-  // 2. Se ainda precisar de mais leads, minera estabelecimentos reais no Maps e checa presença no Instagram
+  // 2. Se ainda precisar de mais leads, minera estabelecimentos reais no Maps (consulta rápida, sem deepScan pesado)
   if (leadMap.size < targetLimit) {
     try {
       const mapsLeads = await scrapeGoogleMaps({
         query,
         location,
-        limit: targetLimit - leadMap.size,
-        deepScan: true,
+        limit: Math.min(15, targetLimit - leadMap.size),
+        deepScan: false, // Rápido!
       });
 
       for (const place of mapsLeads) {
@@ -56,7 +56,11 @@ export async function scrapeInstagramBusiness(
         // Se tem website, tenta enriquecer o Instagram oficial
         if (place.website && !place.socials?.instagram) {
           try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 3000);
             const enriched = await enrichWebsite(place.website);
+            clearTimeout(timeoutId);
+
             if (enriched.socials.instagram) {
               const match = enriched.socials.instagram.match(/instagram\.com\/([a-zA-Z0-9._]+)/i);
               const handle = match ? `@${match[1].replace(/\/$/, "")}` : undefined;
@@ -126,39 +130,48 @@ async function searchDirectInstagramProfiles(
   const searchQueries = [
     `site:instagram.com ${query} ${cleanCity}`,
     `site:instagram.com "${query}" "${cleanCity}"`,
-    `site:instagram.com ${query} ${location}`,
   ];
 
   for (const q of searchQueries) {
     if (limit > 0 && leadMap.size >= limit) break;
 
     try {
-      const res = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(q)}`, {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3500);
+
+      const res = await fetch("https://lite.duckduckgo.com/lite/", {
+        method: "POST",
+        signal: controller.signal,
         headers: {
           "User-Agent":
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-          "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
+          "Content-Type": "application/x-www-form-urlencoded",
         },
+        body: `q=${encodeURIComponent(q)}`,
       });
+
+      clearTimeout(timeoutId);
 
       if (!res.ok) continue;
 
       const html = await res.text();
+      if (html.includes("challenge") || html.includes("Checking your browser")) continue;
+
       const $ = cheerio.load(html);
 
-      $(".result").each((_, el) => {
+      $("td .result-link").each((_, el) => {
         if (limit > 0 && leadMap.size >= limit) return false;
 
-        const rawTitle = $(el).find(".result__title").text().trim().replace(/\s+/g, " ");
-        const snippet = $(el).find(".result__snippet").text().trim().replace(/\s+/g, " ");
-        const rawUrl = $(el).find(".result__url").text().trim();
+        const rawTitle = $(el).text().trim().replace(/\s+/g, " ");
+        const href = $(el).attr("href") || "";
+        const snippet = $(el).closest("tr").next().find(".result-snippet").text().trim().replace(/\s+/g, " ");
 
         // Extrair @handle oficial do perfil
-        const handleMatch = (rawUrl + " " + rawTitle).match(/instagram\.com\/([a-zA-Z0-9._]+)/i);
+        const handleMatch = (href + " " + rawTitle).match(/instagram\.com\/([a-zA-Z0-9._]+)/i);
         if (!handleMatch) return;
 
         const handle = handleMatch[1].toLowerCase().replace(/\/$/, "");
-        if (["p", "reel", "explore", "stories", "tv", "reels", "about", "developer"].includes(handle)) {
+        if (["p", "reel", "explore", "stories", "tv", "reels", "about", "developer", "accounts"].includes(handle)) {
           return;
         }
 
