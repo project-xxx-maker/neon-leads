@@ -44,7 +44,7 @@ export function SearchHeader({ onSearch, isLoading }: SearchHeaderProps) {
   const [query, setQuery] = useState("Dentistas");
   const [location, setLocation] = useState("São Paulo, SP");
   const [limit, setLimit] = useState<number>(20); // 20 leads por padrão para resposta instantânea
-  const [source, setSource] = useState<"maps" | "instagram" | "all">("maps");
+  const [source, setSource] = useState<"maps" | "instagram" | "all">("all");
   const [deepScan, setDeepScan] = useState(false); // Foco em velocidade; pode ser ativado nas opções avançadas
   const [showAdvanced, setShowAdvanced] = useState(false);
 
