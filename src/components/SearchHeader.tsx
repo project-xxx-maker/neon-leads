@@ -152,7 +152,7 @@ export function SearchHeader({ onSearch, isLoading }: SearchHeaderProps) {
               placeholder={
                 source === "instagram"
                   ? "Nicho no Instagram (ex: Dentistas, Barbearias, Estética...)"
-                  : "Nicho ou termo (ex: Dentistas, Restaurantes, Advogados...)"
+                  : "Nichos separados por vírgula (ex: Dentistas, Estética, Barbearias)"
               }
               className="w-full rounded-2xl border border-white/10 bg-slate-950/70 py-3.5 pl-11 pr-4 text-sm text-white placeholder-slate-500 shadow-inner transition-all focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-500/20"
               required

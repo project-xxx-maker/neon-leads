@@ -35,7 +35,6 @@ function requestedLimit(limit) {
 }
 
 function relatedQueries(query) {
-  const normalized = String(query).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   const groups = [
     { terms: ["dentista", "odontologia", "odontologica", "odontologico"], queries: ["dentista", "clínica odontológica", "ortodontista", "implante dentário", "odontopediatra"] },
     { terms: ["estetica", "estética"], queries: ["clínica de estética", "estética facial", "harmonização facial", "biomédica estética"] },
@@ -43,8 +42,13 @@ function relatedQueries(query) {
     { terms: ["barbearia", "barbeiro"], queries: ["barbearia", "barbeiro", "barbearia premium"] },
     { terms: ["academia", "fitness"], queries: ["academia", "personal trainer", "estúdio de pilates", "crossfit"] },
   ];
-  const match = groups.find((group) => group.terms.some((term) => normalized.includes(term)));
-  return [...new Set([query, ...(match?.queries || [])])];
+  const segments = String(query).split(",").map((segment) => segment.trim()).filter(Boolean);
+  const expanded = segments.flatMap((segment) => {
+    const normalized = segment.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    const match = groups.find((group) => group.terms.some((term) => normalized.includes(term)));
+    return [segment, ...(match?.queries || [])];
+  });
+  return [...new Set(expanded)];
 }
 
 function passesFilters(item, body) {
@@ -85,13 +89,21 @@ function lead(data, query, location, source) {
 async function mapSearch(page, detailsPage, body, emit, max) {
   const { query, location } = body;
   const candidates = new Map();
-  for (const nicheQuery of relatedQueries(query)) {
-    if (candidates.size >= max * 2) break;
+  const hasStrictFilter = Boolean(body.onlyWithoutWebsite || body.onlyWithWebsite || body.onlyWithPhone || body.onlyWithWhatsapp || Number(body.minRating) > 0);
+  // Com filtros, é preciso avaliar bem mais fichas para repor as empresas descartadas.
+  const candidateTarget = Math.min(max * (hasStrictFilter ? 8 : 3), 2000);
+  const searchTerms = relatedQueries(query);
+  const perTermTarget = Math.max(Math.ceil(candidateTarget / searchTerms.length), 30);
+  for (const nicheQuery of searchTerms) {
+    if (candidates.size >= candidateTarget) break;
+    const beforeTerm = candidates.size;
     await page.goto(`https://www.google.com/maps/search/${encodeURIComponent(`${nicheQuery} ${location}`)}?hl=pt-BR`, { waitUntil: "domcontentloaded", timeout: 45000 });
     const accept = page.getByRole("button", { name: /aceitar|concordo/i });
     if (await accept.count()) await accept.first().click().catch(() => {});
     await page.locator('div[role="feed"]').waitFor({ timeout: 15000 }).catch(() => {});
-    for (let scroll = 0; scroll < 16 && candidates.size < max * 2; scroll++) {
+    let stalledScrolls = 0;
+    for (let scroll = 0; scroll < 80 && candidates.size < candidateTarget; scroll++) {
+      const beforeScroll = candidates.size;
       const cards = await page.locator('a.hfpxzc').evaluateAll((els) => els.map((a) => ({
         name: a.getAttribute("aria-label") || a.textContent || "",
         url: a.href,
@@ -101,10 +113,13 @@ async function mapSearch(page, detailsPage, body, emit, max) {
         const name = card.name.trim();
         if (validName(name) && !candidates.has(name.toLowerCase())) candidates.set(name.toLowerCase(), card);
       }
+      if (candidates.size - beforeTerm >= perTermTarget) break;
       const feed = page.locator('div[role="feed"]');
       if (!(await feed.count())) break;
       await feed.evaluate((element) => { element.scrollTop = element.scrollHeight; });
       await page.waitForTimeout(700);
+      stalledScrolls = candidates.size === beforeScroll ? stalledScrolls + 1 : 0;
+      if (stalledScrolls >= 4) break;
     }
   }
 
@@ -116,7 +131,7 @@ async function mapSearch(page, detailsPage, body, emit, max) {
       await detailsPage.goto(card.url, { waitUntil: "domcontentloaded", timeout: 30000 });
       await detailsPage.waitForTimeout(450);
       const details = await detailsPage.evaluate(() => {
-        const website = document.querySelector('a[data-item-id="authority"]')?.getAttribute("href") || "";
+        const website = document.querySelector('a[data-item-id="authority"], a[aria-label*="Site"], a[aria-label*="Website"]')?.getAttribute("href") || "";
         const phone = document.querySelector('button[data-item-id^="phone:"]')?.getAttribute("data-item-id")?.replace(/^phone:/, "") || "";
         const address = document.querySelector('button[data-item-id="address"]')?.textContent || "";
         const text = document.body.innerText || "";
